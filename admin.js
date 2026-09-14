@@ -55,16 +55,19 @@ async function fetchTrips() {
   return data || [];
 }
 
+let realtimeChannel = null;
+
 function initRealtime() {
   if (realtimeChannel) {
     supabaseClient.removeChannel(realtimeChannel);
     realtimeChannel = null;
   }
+
   realtimeChannel = supabaseClient
-    .channel("trips-changes")
+    .channel('trips-changes')
     .on(
-      "postgres_changes",
-      { event: "INSERT", schema: "public", table: "trips" },
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'trips' },
       (payload) => {
         if (!payload?.new) return;
         const exists = state.trips.some((t) => t.id === payload.new.id);
@@ -73,7 +76,32 @@ function initRealtime() {
         renderAll();
       }
     )
-    .subscribe();
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'trips' },
+      (payload) => {
+        if (!payload?.new) return;
+        const idx = state.trips.findIndex((t) => t.id === payload.new.id);
+        if (idx >= 0) state.trips[idx] = payload.new;
+        else state.trips.unshift(payload.new);
+        renderAll();
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: 'DELETE', schema: 'public', table: 'trips' },
+      (payload) => {
+        if (!payload?.old) return;
+        state.trips = state.trips.filter((t) => t.id !== payload.old.id);
+        renderAll();
+      }
+    )
+    .subscribe((status) => {
+      console.log('Realtime status:', status);
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        setTimeout(initRealtime, 5000);
+      }
+    });
 }
 
 function stopRealtime() {
