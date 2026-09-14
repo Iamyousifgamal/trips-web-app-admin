@@ -1,808 +1,956 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>لوحة تحكم الرحلات</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js"></script>
-<style>
-/* ============ DESIGN TOKENS ============ */
-:root{
-  --bg: #0A0A0B;
-  --surface: #141417;
-  --surface-2: #1C1C20;
-  --surface-hover: #212126;
-  --border: #28282D;
-  --border-soft: #1F1F23;
-  --text: #F2F2F1;
-  --text-muted: #93939C;
-  --text-faint: #5C5C64;
-  --gold: #C9A052;
-  --gold-soft: rgba(201,160,82,0.12);
-  --gold-bright: #E0BD79;
-  --danger: #E5675F;
-  --danger-soft: rgba(229,103,95,0.12);
-  --positive: #6FBF8B;
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --shadow-card: 0 1px 0 rgba(255,255,255,0.03) inset, 0 8px 24px rgba(0,0,0,0.35);
-}
-*{box-sizing:border-box; margin:0; padding:0;}
-html,body{height:100%;}
-body{
-  font-family: 'Cairo', sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  font-size: 14px;
-  line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
-}
-body::before{
-  content:"";
-  position: fixed; inset:0;
-  background:
-    radial-gradient(700px 400px at 85% -5%, rgba(201,160,82,0.06), transparent 60%),
-    radial-gradient(500px 300px at 5% 10%, rgba(201,160,82,0.03), transparent 60%);
-  pointer-events:none;
-  z-index:0;
-}
-::selection{ background: var(--gold-soft); color: var(--gold-bright); }
-button{ font-family:inherit; cursor:pointer; }
-input, select{ font-family:inherit; }
-::-webkit-scrollbar{ width:10px; height:10px; }
-::-webkit-scrollbar-track{ background: transparent; }
-::-webkit-scrollbar-thumb{ background: var(--border); border-radius: 8px; }
-::-webkit-scrollbar-thumb:hover{ background: #34343a; }
+const SUPABASE_URL = 'https://sdbvevefxziyhzqzilrv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkYnZldmVmeHppeWh6cXppbHJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkzMjk0NjUsImV4cCI6MjEwNDkwNTQ2NX0.ugU0hZIdZmXYQXxdxGBSXJ8qy-EKBJ2pckemh8Yx7zg';
 
-.hidden{ display:none !important; }
+let supabaseClient = null;
+let realtimeChannel = null;
 
-/* ============ LOGIN ============ */
-#login-screen{
-  min-height: 100vh;
-  display:flex; align-items:center; justify-content:center;
-  position: relative; z-index:1;
-  padding: 24px;
-}
-.login-card{
-  width: 100%; max-width: 380px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 36px 32px;
-  box-shadow: var(--shadow-card);
-}
-.login-mark{
-  width: 44px; height: 44px;
-  border-radius: 10px;
-  background: linear-gradient(155deg, var(--gold), #8a6a2f);
-  display:flex; align-items:center; justify-content:center;
-  margin-bottom: 20px;
-  font-size: 20px;
-}
-.login-card h1{
-  font-size: 20px; font-weight: 700; margin-bottom: 6px;
-}
-.login-card p.sub{
-  color: var(--text-muted); font-size: 13px; margin-bottom: 26px;
-}
-.field{ margin-bottom: 16px; }
-.field label{
-  display:block; font-size: 12.5px; color: var(--text-muted);
-  margin-bottom: 7px; font-weight: 600;
-}
-.field input{
-  width: 100%;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: var(--radius-sm);
-  padding: 11px 13px;
-  font-size: 14px;
-  outline: none;
-  transition: border-color .15s, background .15s;
-}
-.field input:focus{
-  border-color: var(--gold);
-  background: #1a1a1e;
-}
-.field input::placeholder{ color: var(--text-faint); }
-.btn{
-  border: none; border-radius: var(--radius-sm);
-  font-weight: 700; font-size: 14px;
-  padding: 11px 18px;
-  transition: transform .08s ease, background .15s, border-color .15s, opacity .15s;
-  display: inline-flex; align-items:center; justify-content:center; gap:8px;
-}
-.btn:active{ transform: scale(0.98); }
-.btn-primary{ background: var(--gold); color: #17130A; width: 100%; }
-.btn-primary:hover{ background: var(--gold-bright); }
-.btn-ghost{
-  background: transparent; border: 1px solid var(--border); color: var(--text);
-}
-.btn-ghost:hover{ background: var(--surface-2); border-color: #3a3a40; }
-.login-error{
-  background: var(--danger-soft); border: 1px solid rgba(229,103,95,0.3);
-  color: var(--danger); font-size: 12.5px; border-radius: var(--radius-sm);
-  padding: 10px 12px; margin-bottom: 16px; display:none;
-}
-.login-note{
-  margin-top: 18px; font-size: 11.5px; color: var(--text-faint); line-height: 1.7;
+const state = {
+  range: "7d",
+  customFrom: null,
+  customTo: null,
+  search: "",
+  sortKey: "cost",
+  sortDir: "desc",
+  page: 1,
+  pageSize: 20,
+  trips: [],
+  isAdmin: false,
+  adminEmail: "",
+};
+
+let dailyChart = null;
+let topUsersChart = null;
+
+function initSupabase() {
+  if (typeof window.supabase === "undefined") {
+    showError("فشل تحميل مكتبة Supabase. يرجى تحديث الصفحة.");
+    return false;
+  }
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  return true;
 }
 
-/* ============ ACCESS DENIED ============ */
-#denied-screen{
-  min-height: 100vh; display:flex; align-items:center; justify-content:center;
-  position:relative; z-index:1; padding: 24px;
-}
-.denied-card{
-  text-align:center; max-width: 340px;
-}
-.denied-card .icon{ font-size: 34px; margin-bottom: 14px; }
-.denied-card h2{ font-size: 18px; margin-bottom: 8px; }
-.denied-card p{ color: var(--text-muted); font-size: 13.5px; margin-bottom: 22px; }
-
-/* ============ APP SHELL ============ */
-#app{ position:relative; z-index:1; min-height:100vh; display:none; }
-.topbar{
-  position: sticky; top:0; z-index: 40;
-  background: rgba(10,10,11,0.85);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--border-soft);
-  padding: 16px 28px;
-  display:flex; align-items:center; justify-content:space-between;
-  gap: 16px; flex-wrap: wrap;
-}
-.brand{ display:flex; align-items:center; gap: 12px; }
-.brand .mark{
-  width: 34px; height:34px; border-radius: 9px;
-  background: linear-gradient(155deg, var(--gold), #8a6a2f);
-  display:flex; align-items:center; justify-content:center; font-size:16px;
-  flex-shrink:0;
-}
-.brand-text h1{ font-size: 15.5px; font-weight: 700; }
-.brand-text span{ font-size: 11.5px; color: var(--text-muted); }
-.topbar-right{ display:flex; align-items:center; gap: 12px; flex-wrap: wrap; }
-.live-dot{
-  display:flex; align-items:center; gap:7px;
-  font-size: 12px; color: var(--text-muted);
-  background: var(--surface); border:1px solid var(--border);
-  padding: 7px 12px; border-radius: 999px;
-}
-.live-dot .dot{
-  width:7px; height:7px; border-radius:50%; background: var(--positive);
-  box-shadow: 0 0 0 3px rgba(111,191,139,0.15);
-  animation: pulse 2s infinite;
-}
-@keyframes pulse{
-  0%,100%{ opacity:1; } 50%{ opacity:.4; }
-}
-.admin-chip{
-  display:flex; align-items:center; gap:9px;
-  font-size: 12.5px; color: var(--text);
-  background: var(--surface); border:1px solid var(--border);
-  padding: 6px 8px 6px 14px; border-radius: 999px;
-}
-.admin-chip .avatar{
-  width:24px; height:24px; border-radius:50%;
-  background: var(--surface-2); border:1px solid var(--border);
-  display:flex; align-items:center; justify-content:center; font-size: 11px; font-weight:700;
-  color: var(--gold-bright);
+async function realLogin(email, password) {
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+  return data.user;
 }
 
-.container{ padding: 24px 28px 60px; max-width: 1360px; margin: 0 auto; }
-
-/* error banner */
-.error-banner{
-  display:none; align-items:center; justify-content:space-between; gap: 12px;
-  background: var(--danger-soft); border:1px solid rgba(229,103,95,0.3);
-  color: #f0a5a0; padding: 12px 16px; border-radius: var(--radius-md);
-  margin-bottom: 18px; font-size: 13px;
-}
-.error-banner button{ background:none; border:none; color: inherit; font-size: 16px; opacity:.7; }
-.error-banner button:hover{ opacity:1; }
-
-/* ============ FILTERS ============ */
-.section-label{
-  font-size: 12px; color: var(--text-faint); font-weight:700;
-  letter-spacing: 0.02em; margin-bottom: 10px;
-}
-.filters-row{
-  display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom: 22px;
-}
-.pill{
-  background: var(--surface); border:1px solid var(--border);
-  color: var(--text-muted); font-size:13px; font-weight:600;
-  padding: 8px 16px; border-radius: 999px;
-  transition: all .15s;
-}
-.pill:hover{ color: var(--text); border-color:#3a3a40; }
-.pill.active{
-  background: var(--gold-soft); border-color: rgba(201,160,82,0.5); color: var(--gold-bright);
-}
-.custom-range{
-  display:flex; align-items:center; gap:8px;
-  background: var(--surface); border:1px solid var(--border);
-  border-radius: 999px; padding: 5px 8px 5px 16px;
-}
-.custom-range input[type=date]{
-  background: var(--surface-2); border:1px solid var(--border); color:var(--text);
-  border-radius: 999px; padding:5px 10px; font-size:12.5px; color-scheme: dark;
-}
-.custom-range span{ color: var(--text-faint); font-size:12px; }
-.custom-range button{
-  background: var(--gold); color:#17130A; border:none; border-radius:999px;
-  padding: 6px 14px; font-size:12.5px; font-weight:700;
+async function realCheckAdmin(userId) {
+  const { data, error } = await supabaseClient
+    .from("admins")
+    .select("id")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error) return false;
+  return !!data;
 }
 
-/* ============ SUMMARY CARDS ============ */
-.cards-grid{
-  display:grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px;
-}
-.stat-card{
-  background: var(--surface); border:1px solid var(--border);
-  border-radius: var(--radius-lg); padding: 18px 20px;
-  position: relative; overflow:hidden;
-}
-.stat-card .top-row{ display:flex; align-items:flex-start; justify-content:space-between; margin-bottom: 14px; }
-.stat-card .icon-wrap{
-  width: 34px; height:34px; border-radius: 9px;
-  background: var(--gold-soft); display:flex; align-items:center; justify-content:center;
-  font-size: 15px; color: var(--gold-bright);
-}
-.stat-card .label{ font-size: 12.5px; color: var(--text-muted); font-weight:600; }
-.stat-card .value{ font-size: 25px; font-weight: 800; letter-spacing: -0.01em; }
-.stat-card .value small{ font-size: 13px; color: var(--text-muted); font-weight:600; margin-inline-start:2px; }
-
-/* ============ CHARTS ============ */
-.charts-grid{
-  display:grid; grid-template-columns: 1.4fr 1fr; gap: 14px; margin-bottom: 22px;
-}
-.chart-card{
-  background: var(--surface); border:1px solid var(--border);
-  border-radius: var(--radius-lg); padding: 20px;
-}
-.chart-card .head{ display:flex; align-items:center; justify-content:space-between; margin-bottom: 16px; }
-.chart-card h3{ font-size: 14px; font-weight:700; }
-.chart-card .head span{ font-size: 11.5px; color: var(--text-faint); }
-.chart-card .canvas-wrap{ height: 220px; position:relative; }
-
-/* ============ TABLE CARD ============ */
-.table-card{
-  background: var(--surface); border:1px solid var(--border);
-  border-radius: var(--radius-lg); overflow:hidden;
-}
-.table-toolbar{
-  display:flex; align-items:center; justify-content:space-between; gap: 12px;
-  padding: 16px 20px; border-bottom: 1px solid var(--border-soft); flex-wrap:wrap;
-}
-.search-wrap{ position:relative; width: 280px; max-width:100%; }
-.search-wrap input{
-  width:100%; background: var(--surface-2); border:1px solid var(--border);
-  color: var(--text); border-radius: var(--radius-sm); padding: 9px 38px 9px 13px;
-  font-size: 13.5px; outline:none; transition: border-color .15s;
-}
-.search-wrap input:focus{ border-color: var(--gold); }
-.search-wrap .icon{ position:absolute; inset-inline-end: 12px; top:50%; transform:translateY(-50%); color: var(--text-faint); font-size:14px; }
-.toolbar-actions{ display:flex; gap:10px; align-items:center; }
-.table-wrap{ overflow-x:auto; }
-table{ width:100%; border-collapse: collapse; min-width: 860px; }
-thead th{
-  text-align: start; font-size: 12px; font-weight:700; color: var(--text-faint);
-  padding: 12px 18px; border-bottom: 1px solid var(--border-soft);
-  white-space: nowrap; user-select:none;
-  background: var(--surface);
-  position: sticky; top:0;
-}
-thead th.sortable{ cursor:pointer; }
-thead th.sortable:hover{ color: var(--text-muted); }
-thead th .sort-arrow{ display:inline-block; margin-inline-start:5px; opacity:.5; font-size:10px; }
-thead th.sort-active .sort-arrow{ opacity:1; color: var(--gold-bright); }
-tbody td{
-  padding: 14px 18px; border-bottom: 1px solid var(--border-soft); font-size: 13.5px;
-  white-space: nowrap;
-}
-tbody tr{ transition: background .12s; }
-tbody tr:hover{ background: var(--surface-hover); }
-tbody tr:last-child td{ border-bottom:none; }
-.name-cell{ display:flex; align-items:center; gap:10px; }
-.name-cell .avatar{
-  width:30px; height:30px; border-radius:50%; flex-shrink:0;
-  background: var(--surface-2); border:1px solid var(--border);
-  display:flex; align-items:center; justify-content:center;
-  font-size:12px; font-weight:700; color: var(--gold-bright);
-}
-.name-cell .who .full{ font-weight:600; color:var(--text); }
-.phone-cell{ direction: ltr; text-align: end; color: var(--text-muted); font-variant-numeric: tabular-nums; }
-.num-cell{ font-variant-numeric: tabular-nums; font-weight:600; }
-.cost-cell{ font-variant-numeric: tabular-nums; font-weight:700; color: var(--gold-bright); }
-.date-cell{ color: var(--text-muted); font-variant-numeric: tabular-nums; }
-.link-btn{
-  background: transparent; border:1px solid var(--border); color: var(--text);
-  font-size: 12.5px; font-weight:600; padding: 7px 14px; border-radius: 999px;
-  transition: all .15s;
-}
-.link-btn:hover{ border-color: var(--gold); color: var(--gold-bright); background: var(--gold-soft); }
-
-tfoot td{
-  padding: 15px 18px; font-weight: 800; font-size: 13.5px;
-  background: var(--surface-2); border-top: 1px solid var(--border);
-}
-.table-footer{
-  display:flex; align-items:center; justify-content:space-between;
-  padding: 14px 20px; border-top: 1px solid var(--border-soft); flex-wrap:wrap; gap:10px;
-}
-.page-info{ font-size:12.5px; color: var(--text-muted); }
-.pager{ display:flex; gap:6px; }
-.pager button{
-  background: var(--surface-2); border:1px solid var(--border); color: var(--text);
-  width:32px; height:32px; border-radius: var(--radius-sm); font-size:13px; font-weight:600;
-}
-.pager button:hover:not(:disabled){ border-color: var(--gold); }
-.pager button:disabled{ opacity:.35; cursor:not-allowed; }
-.pager button.active{ background: var(--gold); color:#17130A; border-color:var(--gold); }
-
-.empty-state{
-  padding: 70px 20px; text-align:center; color: var(--text-muted);
-}
-.empty-state .icon{ font-size: 30px; margin-bottom: 12px; opacity:.6; }
-.empty-state p{ font-size: 13.5px; }
-
-.skeleton-row td{ padding: 14px 18px; }
-.skel{
-  height: 14px; border-radius: 4px;
-  background: linear-gradient(90deg, var(--surface-2) 25%, #26262b 37%, var(--surface-2) 63%);
-  background-size: 400% 100%;
-  animation: shimmer 1.4s ease infinite;
-}
-@keyframes shimmer{ 0%{ background-position: 100% 0; } 100%{ background-position: -100% 0; } }
-
-/* ============ MODAL ============ */
-.modal-overlay{
-  position: fixed; inset:0; background: rgba(0,0,0,0.6);
-  backdrop-filter: blur(3px);
-  display:none; align-items:center; justify-content:center; z-index: 100; padding: 20px;
-}
-.modal-overlay.show{ display:flex; }
-.modal-card{
-  background: var(--surface); border:1px solid var(--border); border-radius: var(--radius-lg);
-  width: 100%; max-width: 760px; max-height: 84vh; display:flex; flex-direction:column;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-}
-.modal-head{
-  display:flex; align-items:center; justify-content:space-between;
-  padding: 20px 22px; border-bottom: 1px solid var(--border-soft);
-}
-.modal-head .who{ display:flex; align-items:center; gap: 12px; }
-.modal-head .avatar{
-  width:38px; height:38px; border-radius:50%;
-  background: var(--gold-soft); border:1px solid rgba(201,160,82,0.4);
-  display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; color:var(--gold-bright);
-}
-.modal-head h3{ font-size: 15.5px; font-weight:700; }
-.modal-head p{ font-size: 12px; color: var(--text-muted); direction:ltr; text-align:end; }
-.modal-close{
-  background: var(--surface-2); border:1px solid var(--border); color: var(--text);
-  width: 30px; height:30px; border-radius:50%; font-size:14px;
-}
-.modal-close:hover{ border-color: var(--danger); color: var(--danger); }
-.modal-body{ overflow-y:auto; padding: 0; }
-.modal-foot{
-  display:flex; align-items:center; justify-content:space-between;
-  padding: 16px 22px; border-top: 1px solid var(--border-soft);
-  background: var(--surface-2);
-}
-.modal-foot .stat{ text-align:center; }
-.modal-foot .stat b{ display:block; font-size:16px; font-weight:800; }
-.modal-foot .stat span{ font-size:11px; color: var(--text-muted); }
-
-/* ============ TRIPS LIST IN MODAL ============ */
-.trips-list {
-  padding: 16px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+async function fetchTrips() {
+  const { data, error } = await supabaseClient
+    .from("trips")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
 }
 
-.trip-block {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  transition: border-color .15s;
+function playNotificationSound() {
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+
+    oscillator.frequency.value = 880;
+    oscillator.type = 'sine';
+    gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+
+    oscillator.start(audioCtx.currentTime);
+    oscillator.stop(audioCtx.currentTime + 0.4);
+  } catch (e) {
+    console.log('الصوت فشل:', e);
+  }
 }
 
-.trip-block:hover {
-  border-color: rgba(201,160,82,0.4);
+function showToast(trip) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  const legs = Array.isArray(trip.legs) ? trip.legs : [];
+  const routeText = legs.length
+    ? legs.map(l => `${l.from || '—'} → ${l.to || '—'}`).join(' | ')
+    : '—';
+
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.innerHTML = `
+    <span class="toast-title">🚐 رحلة جديدة</span>
+    <span class="toast-body">
+      ${escapeHtml(trip.full_name || '—')}<br>
+      ${escapeHtml(routeText)}<br>
+      💰 ${trip.total_cost || 0} جنيه
+    </span>
+  `;
+  container.appendChild(toast);
+
+  setTimeout(() => toast.remove(), 5000);
 }
 
-.trip-block-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  background: rgba(201,160,82,0.06);
-  border-bottom: 1px solid var(--border-soft);
-  flex-wrap: wrap;
-  gap: 8px;
+async function requestNotificationPermission() {
+  if (!('Notification' in window)) return false;
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') return false;
+  const permission = await Notification.requestPermission();
+  return permission === 'granted';
 }
 
-.trip-block-date {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--gold-bright);
-  display: flex;
-  align-items: center;
-  gap: 6px;
+function showBrowserNotification(trip) {
+  if (!('Notification' in window)) return;
+  if (Notification.permission !== 'granted') return;
+
+  const legs = Array.isArray(trip.legs) ? trip.legs : [];
+  const routeText = legs.length
+    ? legs.map(l => `${l.from || '—'} → ${l.to || '—'}`).join('\n')
+    : '—';
+
+  try {
+    const n = new Notification('🚐 رحلة جديدة', {
+      body: `${trip.full_name}\n${routeText}\nالتكلفة: ${trip.total_cost || 0} جنيه`,
+      tag: 'trip-' + trip.id,
+    });
+    n.onclick = () => {
+      window.focus();
+      n.close();
+    };
+    setTimeout(() => n.close(), 8000);
+  } catch (e) {
+    console.log('الإشعار فشل:', e);
+  }
 }
 
-.trip-block-time {
-  font-size: 11.5px;
-  color: var(--text-muted);
-  direction: ltr;
+function initRealtime() {
+  if (realtimeChannel) {
+    supabaseClient.removeChannel(realtimeChannel);
+    realtimeChannel = null;
+  }
+  realtimeChannel = supabaseClient
+    .channel("trips-changes")
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "trips" },
+      (payload) => {
+        if (!payload?.new) return;
+        const exists = state.trips.some((t) => t.id === payload.new.id);
+        if (exists) return;
+        state.trips.unshift(payload.new);
+        renderAll();
+        showToast(payload.new);
+        playNotificationSound();
+        showBrowserNotification(payload.new);
+      }
+    )
+    .subscribe();
 }
 
-.trip-block-legs {
-  padding: 0;
+function stopRealtime() {
+  if (realtimeChannel && supabaseClient) {
+    supabaseClient.removeChannel(realtimeChannel);
+    realtimeChannel = null;
+  }
 }
 
-.trip-leg {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border-soft);
-  align-items: center;
+function fmtMoney(n) {
+  const value = Number(n) || 0;
+  return new Intl.NumberFormat("ar-EG", { maximumFractionDigits: 2 }).format(value);
 }
 
-.trip-leg:last-child {
-  border-bottom: none;
+function fmtDate(d) {
+  if (!d) return "—";
+  const date = new Date(d);
+  if (isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("ar-EG", { year: "numeric", month: "2-digit", day: "2-digit" });
 }
 
-.trip-leg-route {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  flex-wrap: wrap;
+function fmtDateTime(d) {
+  if (!d) return "—";
+  const date = new Date(d);
+  if (isNaN(date.getTime())) return "—";
+  return date.toLocaleString("ar-EG", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
-.trip-leg-from,
-.trip-leg-to {
-  font-weight: 600;
-  color: var(--text);
+function initials(name) {
+  const clean = String(name || "").trim();
+  return clean ? clean.charAt(0) : "?";
 }
 
-.trip-leg-arrow {
-  color: var(--gold);
-  font-size: 12px;
+function showError(msg) {
+  const banner = document.getElementById("error-banner");
+  const text = document.getElementById("error-text");
+  if (!banner || !text) return;
+  text.textContent = msg;
+  banner.style.display = "flex";
 }
 
-.trip-leg-meta {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 4px;
-  font-size: 11.5px;
-  color: var(--text-muted);
+function hideError() {
+  const banner = document.getElementById("error-banner");
+  if (banner) banner.style.display = "none";
 }
 
-.trip-leg-transport {
-  background: var(--surface);
-  padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
+function getRangeBounds() {
+  const now = new Date();
+  let from = null;
+  let to = now;
+  switch (state.range) {
+    case "24h":
+      from = new Date(now.getTime() - 24 * 3600 * 1000);
+      break;
+    case "7d":
+      from = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
+      break;
+    case "14d":
+      from = new Date(now.getTime() - 14 * 24 * 3600 * 1000);
+      break;
+    case "30d":
+      from = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
+      break;
+    case "all":
+      from = null;
+      break;
+    case "custom":
+      from = state.customFrom ? new Date(state.customFrom) : null;
+      to = state.customTo ? new Date(state.customTo + "T23:59:59") : now;
+      break;
+  }
+  return { from, to };
 }
 
-.trip-leg-cost {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--gold-bright);
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
+function getFilteredTrips() {
+  const { from, to } = getRangeBounds();
+  return state.trips.filter((t) => {
+    const created = new Date(t.created_at);
+    if (isNaN(created.getTime())) return false;
+    if (from && created < from) return false;
+    if (to && created > to) return false;
+    return true;
+  });
 }
 
-.trip-block-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  background: rgba(201,160,82,0.08);
-  border-top: 1px solid rgba(201,160,82,0.2);
-  font-size: 13px;
-  font-weight: 700;
+function aggregateByUser(trips) {
+  const map = new Map();
+  trips.forEach((t) => {
+    const key = t.phone || t.id;
+    if (!map.has(key)) {
+      map.set(key, {
+        key,
+        full_name: t.full_name || "—",
+        phone: t.phone || "—",
+        trips: 0,
+        totalCost: 0,
+        lastTripDate: t.trip_date,
+        rows: [],
+      });
+    }
+    const entry = map.get(key);
+    entry.trips += 1;
+    entry.totalCost += Number(t.total_cost) || 0;
+    if (new Date(t.trip_date) > new Date(entry.lastTripDate)) {
+      entry.lastTripDate = t.trip_date;
+    }
+    entry.full_name = t.full_name || entry.full_name;
+    entry.phone = t.phone || entry.phone;
+    entry.rows.push(t);
+  });
+  return Array.from(map.values()).map((e) => ({
+    ...e,
+    avgCost: e.trips ? e.totalCost / e.trips : 0,
+  }));
 }
 
-.trip-block-footer .label {
-  color: var(--text-muted);
-  font-weight: 600;
-  font-size: 12px;
+function renderSummary(filtered, aggregated) {
+  const totalTrips = filtered.length;
+  const totalCost = filtered.reduce((s, t) => s + (Number(t.total_cost) || 0), 0);
+  const uniqueUsers = aggregated.length;
+  const avgCost = totalTrips ? totalCost / totalTrips : 0;
+
+  const tripsEl = document.getElementById("stat-trips");
+  const costEl = document.getElementById("stat-cost");
+  const usersEl = document.getElementById("stat-users");
+  const avgEl = document.getElementById("stat-avg");
+
+  if (tripsEl) tripsEl.innerHTML = `${totalTrips}`;
+  if (costEl) costEl.innerHTML = `${fmtMoney(totalCost)} <small>جنيه</small>`;
+  if (usersEl) usersEl.innerHTML = `${uniqueUsers}`;
+  if (avgEl) avgEl.innerHTML = `${fmtMoney(avgCost)} <small>جنيه</small>`;
 }
 
-.trip-block-footer .total {
-  color: var(--gold-bright);
-  font-size: 15px;
-  font-variant-numeric: tabular-nums;
+function renderCharts(filtered, aggregated) {
+  const dailyCanvas = document.getElementById("chart-daily");
+  const topCanvas = document.getElementById("chart-top-users");
+  if (!dailyCanvas || !topCanvas || typeof Chart === "undefined") return;
+
+  const dailyMap = new Map();
+  filtered.forEach((t) => {
+    const day = t.trip_date;
+    if (!day) return;
+    dailyMap.set(day, (dailyMap.get(day) || 0) + 1);
+  });
+  const sortedDays = Array.from(dailyMap.keys()).sort();
+  const dayLabels = sortedDays.map((d) => fmtDate(d));
+  const dayValues = sortedDays.map((d) => dailyMap.get(d));
+
+  const goldSolid = "#C9A052";
+  const goldFaint = "rgba(201,160,82,0.35)";
+  const gridColor = "rgba(255,255,255,0.05)";
+  const textColor = "#93939C";
+
+  const dailyCtx = dailyCanvas.getContext("2d");
+  if (dailyChart) dailyChart.destroy();
+  dailyChart = new Chart(dailyCtx, {
+    type: "bar",
+    data: {
+      labels: dayLabels,
+      datasets: [
+        {
+          data: dayValues,
+          backgroundColor: goldFaint,
+          hoverBackgroundColor: goldSolid,
+          borderRadius: 4,
+          maxBarThickness: 22,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { color: textColor, font: { family: "Cairo", size: 10 }, maxRotation: 0, autoSkip: true },
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: gridColor },
+          ticks: { color: textColor, font: { family: "Cairo", size: 10 }, precision: 0 },
+        },
+      },
+    },
+  });
+
+  const top5 = [...aggregated].sort((a, b) => b.totalCost - a.totalCost).slice(0, 5);
+  const topCtx = topCanvas.getContext("2d");
+  if (topUsersChart) topUsersChart.destroy();
+  topUsersChart = new Chart(topCtx, {
+    type: "bar",
+    data: {
+      labels: top5.map((u) => u.full_name),
+      datasets: [
+        {
+          data: top5.map((u) => Math.round(u.totalCost)),
+          backgroundColor: goldSolid,
+          borderRadius: 4,
+          maxBarThickness: 16,
+        },
+      ],
+    },
+    options: {
+      indexAxis: "y",
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: {
+          beginAtZero: true,
+          grid: { color: gridColor },
+          ticks: { color: textColor, font: { family: "Cairo", size: 10 } },
+        },
+        y: {
+          grid: { display: false },
+          ticks: { color: textColor, font: { family: "Cairo", size: 11 } },
+        },
+      },
+    },
+  });
+
+  const rangeLabelEl = document.getElementById("chart-daily-range");
+  if (rangeLabelEl) {
+    rangeLabelEl.textContent = sortedDays.length
+      ? `${dayLabels[0]} — ${dayLabels[dayLabels.length - 1]}`
+      : "—";
+  }
 }
 
-.trip-block-notes {
-  padding: 10px 16px;
-  font-size: 12px;
-  color: var(--text-muted);
-  background: var(--surface);
-  border-top: 1px solid var(--border-soft);
-  line-height: 1.6;
+function getSortedFilteredAggregated(aggregated) {
+  let rows = aggregated;
+  if (state.search.trim()) {
+    const q = state.search.trim().toLowerCase();
+    rows = rows.filter(
+      (r) =>
+        (r.full_name || "").toLowerCase().includes(q) ||
+        (r.phone || "").toLowerCase().includes(q)
+    );
+  }
+  const dir = state.sortDir === "asc" ? 1 : -1;
+  rows = [...rows].sort((a, b) => {
+    switch (state.sortKey) {
+      case "trips":
+        return (a.trips - b.trips) * dir;
+      case "cost":
+        return (a.totalCost - b.totalCost) * dir;
+      case "last":
+        return (new Date(a.lastTripDate) - new Date(b.lastTripDate)) * dir;
+      default:
+        return 0;
+    }
+  });
+  return rows;
 }
 
-.trip-block-notes::before {
-  content: "📝 ";
-  margin-inline-end: 4px;
+function renderTable(aggregated) {
+  const rows = getSortedFilteredAggregated(aggregated);
+  const tbody = document.getElementById("table-body");
+  const emptyState = document.getElementById("empty-state");
+  const resultsCount = document.getElementById("results-count");
+  const tableWrap = document.querySelector(".table-wrap");
+
+  if (resultsCount) resultsCount.textContent = `${rows.length} مستخدم`;
+
+  if (!rows.length) {
+    if (tbody) tbody.innerHTML = "";
+    if (emptyState) emptyState.classList.remove("hidden");
+    if (tableWrap) tableWrap.style.display = "none";
+    const gt = document.getElementById("grand-total");
+    if (gt) gt.textContent = fmtMoney(0);
+    renderPager(0);
+    return;
+  }
+
+  if (emptyState) emptyState.classList.add("hidden");
+  if (tableWrap) tableWrap.style.display = "";
+
+  const totalPages = Math.max(1, Math.ceil(rows.length / state.pageSize));
+  state.page = Math.min(state.page, totalPages);
+  const start = (state.page - 1) * state.pageSize;
+  const pageRows = rows.slice(start, start + state.pageSize);
+
+  if (tbody) {
+    tbody.innerHTML = pageRows
+      .map(
+        (r) => `
+      <tr>
+        <td>
+          <div class="name-cell">
+            <div class="avatar">${escapeHtml(initials(r.full_name))}</div>
+            <div class="who"><div class="full">${escapeHtml(r.full_name)}</div></div>
+          </div>
+        </td>
+        <td class="phone-cell">${escapeHtml(r.phone)}</td>
+        <td class="num-cell">${r.trips}</td>
+        <td class="cost-cell">${fmtMoney(r.totalCost)}</td>
+        <td class="num-cell">${fmtMoney(r.avgCost)}</td>
+        <td class="date-cell">${fmtDate(r.lastTripDate)}</td>
+        <td><button class="link-btn" data-key="${escapeAttr(r.key)}">عرض التفاصيل</button></td>
+      </tr>
+    `
+      )
+      .join("");
+  }
+
+  const grandTotal = rows.reduce((s, r) => s + r.totalCost, 0);
+  const gtEl = document.getElementById("grand-total");
+  if (gtEl) gtEl.textContent = fmtMoney(grandTotal) + " جنيه";
+
+  if (tbody) {
+    tbody.querySelectorAll(".link-btn").forEach((btn) => {
+      btn.addEventListener("click", () => openDetails(btn.dataset.key, rows));
+    });
+  }
+
+  renderPager(rows.length);
+  const pageInfo = document.getElementById("page-info-text");
+  if (pageInfo) {
+    pageInfo.textContent = `عرض ${start + 1}–${Math.min(
+      start + state.pageSize,
+      rows.length
+    )} من ${rows.length}`;
+  }
 }
 
-.modal-empty {
-  padding: 60px 20px;
-  text-align: center;
-  color: var(--text-muted);
-  font-size: 13.5px;
+function renderPager(totalRows) {
+  const totalPages = Math.max(1, Math.ceil(totalRows / state.pageSize));
+  const pager = document.getElementById("pager");
+  if (!pager) return;
+
+  let html = `<button ${state.page === 1 ? "disabled" : ""} id="pg-prev">‹</button>`;
+  const maxButtons = 5;
+  let startPage = Math.max(1, state.page - 2);
+  let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+  startPage = Math.max(1, endPage - maxButtons + 1);
+  for (let p = startPage; p <= endPage; p++) {
+    html += `<button class="${p === state.page ? "active" : ""}" data-page="${p}">${p}</button>`;
+  }
+  html += `<button ${state.page === totalPages ? "disabled" : ""} id="pg-next">›</button>`;
+  pager.innerHTML = html;
+
+  pager.querySelectorAll("[data-page]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.page = parseInt(btn.dataset.page);
+      renderAll();
+    });
+  });
+  const prev = document.getElementById("pg-prev");
+  const next = document.getElementById("pg-next");
+  if (prev) {
+    prev.addEventListener("click", () => {
+      state.page = Math.max(1, state.page - 1);
+      renderAll();
+    });
+  }
+  if (next) {
+    next.addEventListener("click", () => {
+      state.page = Math.min(totalPages, state.page + 1);
+      renderAll();
+    });
+  }
 }
 
-/* ============ TOAST NOTIFICATIONS ============ */
-.toast-container {
-  position: fixed;
-  top: 80px;
-  left: 20px;
-  z-index: 9999;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  pointer-events: none;
-}
-.toast {
-  background: linear-gradient(135deg, #C9A052, #E0BD79);
-  color: #17130A;
-  padding: 14px 18px;
-  border-radius: 12px;
-  font-weight: 700;
-  font-size: 13.5px;
-  box-shadow: 0 10px 30px rgba(201,160,82,0.4);
-  animation: slideIn 0.3s ease;
-  min-width: 260px;
-  max-width: 340px;
-  pointer-events: auto;
-  line-height: 1.6;
-}
-.toast .toast-title {
-  display: block;
-  margin-bottom: 4px;
-  font-size: 14px;
-}
-.toast .toast-body {
-  font-size: 12.5px;
-  opacity: 0.85;
-}
-@keyframes slideIn {
-  from { transform: translateX(-400px); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
+function escapeHtml(str) {
+  return String(str ?? "").replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+  );
 }
 
-@media (max-width: 900px){
-  .cards-grid{ grid-template-columns: repeat(2,1fr); }
-  .charts-grid{ grid-template-columns: 1fr; }
+function escapeAttr(str) {
+  return String(str ?? "").replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+  );
 }
-@media (max-width: 560px){
-  .cards-grid{ grid-template-columns: 1fr 1fr; }
-  .container{ padding: 18px 14px 50px; }
-  .topbar{ padding: 14px 16px; }
-  .trip-leg { grid-template-columns: 1fr; }
-  .trip-leg-cost { text-align: start; }
+
+function openDetails(key, aggregatedRows) {
+  const user = aggregatedRows.find((r) => String(r.key) === String(key));
+  if (!user) return;
+
+  const avatarEl = document.getElementById("modal-avatar");
+  const nameEl = document.getElementById("modal-name");
+  const phoneEl = document.getElementById("modal-phone");
+  const listEl = document.getElementById("modal-trips-list");
+
+  if (avatarEl) avatarEl.textContent = initials(user.full_name);
+  if (nameEl) nameEl.textContent = user.full_name;
+  if (phoneEl) phoneEl.textContent = user.phone;
+
+  const sortedTrips = [...user.rows].sort(
+    (a, b) => new Date(b.trip_date) - new Date(a.trip_date)
+  );
+
+  if (listEl) {
+    if (!sortedTrips.length) {
+      listEl.innerHTML = `<div class="modal-empty">لا توجد رحلات</div>`;
+    } else {
+      listEl.innerHTML = sortedTrips
+        .map((t) => {
+          const legs = Array.isArray(t.legs) ? t.legs : [];
+          const tripTotal = Number(t.total_cost) || legs.reduce((s, l) => s + (Number(l.cost) || 0), 0);
+
+          const legsHtml = legs.length
+            ? legs
+                .map(
+                  (leg) => `
+              <div class="trip-leg">
+                <div>
+                  <div class="trip-leg-route">
+                    <span class="trip-leg-from">${escapeHtml(leg.from || "—")}</span>
+                    <span class="trip-leg-arrow">←</span>
+                    <span class="trip-leg-to">${escapeHtml(leg.to || "—")}</span>
+                  </div>
+                  <div class="trip-leg-meta">
+                    <span class="trip-leg-transport">${escapeHtml(leg.transport || "—")}</span>
+                  </div>
+                </div>
+                <div class="trip-leg-cost">${fmtMoney(leg.cost)} ج</div>
+              </div>
+            `
+                )
+                .join("")
+            : `<div class="trip-leg"><div class="trip-leg-route">— لا توجد تفاصيل —</div></div>`;
+
+          const notesHtml = t.notes
+            ? `<div class="trip-block-notes">${escapeHtml(t.notes)}</div>`
+            : "";
+
+          return `
+            <div class="trip-block">
+              <div class="trip-block-header">
+                <div class="trip-block-date">
+                  <span>📅</span>
+                  <span>${fmtDate(t.trip_date)}</span>
+                </div>
+                <div class="trip-block-time">${fmtDateTime(t.created_at)}</div>
+              </div>
+              <div class="trip-block-legs">${legsHtml}</div>
+              <div class="trip-block-footer">
+                <span class="label">إجمالي الرحلة</span>
+                <span class="total">${fmtMoney(tripTotal)} جنيه</span>
+              </div>
+              ${notesHtml}
+            </div>
+          `;
+        })
+        .join("");
+    }
+  }
+
+  const tripsTotalEl = document.getElementById("modal-total-trips");
+  const costTotalEl = document.getElementById("modal-total-cost");
+  if (tripsTotalEl) tripsTotalEl.textContent = user.trips;
+  if (costTotalEl) costTotalEl.textContent = fmtMoney(user.totalCost);
+
+  const overlay = document.getElementById("modal-overlay");
+  if (overlay) overlay.classList.add("show");
 }
-</style>
-</head>
-<body>
 
-<!-- ============ LOGIN SCREEN ============ -->
-<div id="login-screen">
-  <div class="login-card">
-    <div class="login-mark">🚐</div>
-    <h1>تسجيل الدخول للوحة التحكم</h1>
-    <p class="sub">هذه اللوحة مخصصة للمشرفين فقط لمتابعة بيانات الرحلات</p>
-    <div class="login-error" id="login-error"></div>
-    <div class="field">
-      <label>البريد الإلكتروني</label>
-      <input type="email" id="login-email" placeholder="admin@example.com" autocomplete="email">
-    </div>
-    <div class="field">
-      <label>كلمة المرور</label>
-      <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
-    </div>
-    <button class="btn btn-primary" id="login-btn">دخول</button>
-  </div>
-</div>
+function closeDetails() {
+  const overlay = document.getElementById("modal-overlay");
+  if (overlay) overlay.classList.remove("show");
+}
 
-<!-- ============ ACCESS DENIED ============ -->
-<div id="denied-screen" class="hidden">
-  <div class="denied-card">
-    <div class="icon">⛔</div>
-    <h2>تم رفض الوصول</h2>
-    <p>هذا الحساب غير مصرح له بالدخول إلى لوحة التحكم. يرجى التواصل مع مسؤول النظام.</p>
-    <button class="btn btn-ghost" id="denied-back">العودة لتسجيل الدخول</button>
-  </div>
-</div>
+function exportCSV(aggregated) {
+  const rows = getSortedFilteredAggregated(aggregated);
+  const header = ["الاسم", "رقم التليفون", "عدد الرحلات", "إجمالي التكلفة", "متوسط التكلفة", "آخر رحلة"];
+  const lines = [header.join(",")];
+  rows.forEach((r) => {
+    lines.push(
+      [
+        `"${String(r.full_name).replace(/"/g, '""')}"`,
+        r.phone,
+        r.trips,
+        r.totalCost.toFixed(2),
+        r.avgCost.toFixed(2),
+        r.lastTripDate,
+      ].join(",")
+    );
+  });
+  const csv = "\uFEFF" + lines.join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `trips-report-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
-<!-- ============ APP ============ -->
-<div id="app">
-  <div class="topbar">
-    <div class="brand">
-      <div class="mark">🚐</div>
-      <div class="brand-text">
-        <h1>لوحة تحكم الرحلات</h1>
-        <span>متابعة وتحليل بيانات الركاب والرحلات</span>
-      </div>
-    </div>
-    <div class="topbar-right">
-      <div class="live-dot"><span class="dot"></span> تحديث لحظي مفعّل</div>
-      <div class="admin-chip">
-        <span id="admin-email">—</span>
-        <div class="avatar">A</div>
-      </div>
-      <button class="btn btn-ghost" id="notify-btn">🔔 تفعيل الإشعارات</button>
-      <button class="btn btn-ghost" id="logout-btn">تسجيل الخروج</button>
-    </div>
-  </div>
+function renderAll() {
+  const filtered = getFilteredTrips();
+  const aggregated = aggregateByUser(filtered);
+  renderSummary(filtered, aggregated);
+  renderCharts(filtered, aggregated);
+  renderTable(aggregated);
+  window.__aggregatedCache = aggregated;
+}
 
-  <div class="container">
+function bindSortHeaders() {
+  document.querySelectorAll("th.sortable").forEach((th) => {
+    th.addEventListener("click", () => {
+      const key = th.dataset.sort;
+      if (state.sortKey === key) {
+        state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+      } else {
+        state.sortKey = key;
+        state.sortDir = "desc";
+      }
+      document.querySelectorAll("th.sortable").forEach((t) => t.classList.remove("sort-active"));
+      th.classList.add("sort-active");
+      const arrow = th.querySelector(".sort-arrow");
+      if (arrow) arrow.textContent = state.sortDir === "asc" ? "▴" : "▾";
+      state.page = 1;
+      renderAll();
+    });
+  });
+}
 
-    <div class="error-banner" id="error-banner">
-      <span id="error-text"></span>
-      <button id="error-close">✕</button>
-    </div>
+function bindFilters() {
+  document.querySelectorAll("#filters-row .pill").forEach((pill) => {
+    pill.addEventListener("click", () => {
+      document.querySelectorAll("#filters-row .pill").forEach((p) => p.classList.remove("active"));
+      pill.classList.add("active");
+      state.range = pill.dataset.range;
+      state.page = 1;
+      renderAll();
+    });
+  });
+  const applyBtn = document.getElementById("apply-custom");
+  if (applyBtn) {
+    applyBtn.addEventListener("click", () => {
+      const from = document.getElementById("range-from").value;
+      const to = document.getElementById("range-to").value;
+      if (!from || !to) {
+        showError("يرجى تحديد تاريخ البداية والنهاية");
+        return;
+      }
+      hideError();
+      state.range = "custom";
+      state.customFrom = from;
+      state.customTo = to;
+      document.querySelectorAll("#filters-row .pill").forEach((p) => p.classList.remove("active"));
+      state.page = 1;
+      renderAll();
+    });
+  }
+}
 
-    <!-- FILTERS -->
-    <div class="section-label">الفترة الزمنية</div>
-    <div class="filters-row" id="filters-row">
-      <button class="pill" data-range="24h">آخر 24 ساعة</button>
-      <button class="pill active" data-range="7d">آخر 7 أيام</button>
-      <button class="pill" data-range="14d">آخر 14 يوم</button>
-      <button class="pill" data-range="30d">آخر 30 يوم</button>
-      <button class="pill" data-range="all">كل الفترات</button>
-      <div class="custom-range">
-        <input type="date" id="range-from">
-        <span>إلى</span>
-        <input type="date" id="range-to">
-        <button id="apply-custom">تطبيق</button>
-      </div>
-    </div>
+function bindSearch() {
+  let debounce;
+  const input = document.getElementById("search-input");
+  if (!input) return;
+  input.addEventListener("input", (e) => {
+    clearTimeout(debounce);
+    debounce = setTimeout(() => {
+      state.search = e.target.value;
+      state.page = 1;
+      renderAll();
+    }, 200);
+  });
+}
 
-    <!-- SUMMARY CARDS -->
-    <div class="cards-grid">
-      <div class="stat-card">
-        <div class="top-row">
-          <div><div class="label">إجمالي الرحلات</div></div>
-          <div class="icon-wrap">🧭</div>
-        </div>
-        <div class="value" id="stat-trips">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="top-row">
-          <div><div class="label">إجمالي التكلفة</div></div>
-          <div class="icon-wrap">💰</div>
-        </div>
-        <div class="value" id="stat-cost">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="top-row">
-          <div><div class="label">عدد المستخدمين</div></div>
-          <div class="icon-wrap">👤</div>
-        </div>
-        <div class="value" id="stat-users">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="top-row">
-          <div><div class="label">متوسط تكلفة الرحلة</div></div>
-          <div class="icon-wrap">📊</div>
-        </div>
-        <div class="value" id="stat-avg">—</div>
-      </div>
-    </div>
+function bindModal() {
+  const close1 = document.getElementById("modal-close");
+  const close2 = document.getElementById("modal-close-2");
+  const overlay = document.getElementById("modal-overlay");
+  if (close1) close1.addEventListener("click", closeDetails);
+  if (close2) close2.addEventListener("click", closeDetails);
+  if (overlay) {
+    overlay.addEventListener("click", (e) => {
+      if (e.target.id === "modal-overlay") closeDetails();
+    });
+  }
+}
 
-    <!-- CHARTS -->
-    <div class="charts-grid">
-      <div class="chart-card">
-        <div class="head">
-          <h3>عدد الرحلات اليومية</h3>
-          <span id="chart-daily-range">—</span>
-        </div>
-        <div class="canvas-wrap"><canvas id="chart-daily"></canvas></div>
-      </div>
-      <div class="chart-card">
-        <div class="head">
-          <h3>أعلى 5 مستخدمين إنفاقاً</h3>
-          <span>جنيه</span>
-        </div>
-        <div class="canvas-wrap"><canvas id="chart-top-users"></canvas></div>
-      </div>
-    </div>
+function bindExport() {
+  const btn = document.getElementById("export-btn");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    exportCSV(window.__aggregatedCache || []);
+  });
+}
 
-    <!-- TABLE -->
-    <div class="table-card">
-      <div class="table-toolbar">
-        <div class="search-wrap">
-          <input type="text" id="search-input" placeholder="بحث بالاسم أو رقم التليفون">
-          <span class="icon">⌕</span>
-        </div>
-        <div class="toolbar-actions">
-          <span class="page-info" id="results-count">—</span>
-          <button class="btn btn-ghost" id="export-btn">تصدير CSV</button>
-        </div>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>الاسم</th>
-              <th>رقم التليفون</th>
-              <th class="sortable" data-sort="trips">عدد الرحلات <span class="sort-arrow">▾</span></th>
-              <th class="sortable sort-active" data-sort="cost">إجمالي التكلفة <span class="sort-arrow">▾</span></th>
-              <th>متوسط التكلفة</th>
-              <th class="sortable" data-sort="last">آخر رحلة <span class="sort-arrow">▾</span></th>
-              <th>الإجراءات</th>
-            </tr>
-          </thead>
-          <tbody id="table-body"></tbody>
-          <tfoot>
-            <tr>
-              <td colspan="3">الإجمالي الكلي</td>
-              <td id="grand-total" class="cost-cell">—</td>
-              <td colspan="3"></td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-      <div id="empty-state" class="empty-state hidden">
-        <div class="icon">🗒️</div>
-        <p>لا توجد رحلات في هذه الفترة</p>
-      </div>
-      <div class="table-footer">
-        <      </div>
-      <div class="table-footer">
-        <span class="page-info" id="page-info-text">—</span>
-        <div class="pager" id="pager"></div>
-      </div>
-    </div>
+function bindErrorBanner() {
+  const btn = document.getElementById("error-close");
+  if (!btn) return;
+  btn.addEventListener("click", hideError);
+}
 
-  </div>
-</div>
+function bindNotificationButton() {
+  const notifyBtn = document.getElementById("notify-btn");
+  if (!notifyBtn) return;
 
-<!-- ============ DETAILS MODAL ============ -->
-<div class="modal-overlay" id="modal-overlay">
-  <div class="modal-card">
-    <div class="modal-head">
-      <div class="who">
-        <div class="avatar" id="modal-avatar">?</div>
-        <div>
-          <h3 id="modal-name">—</h3>
-          <p id="modal-phone">—</p>
-        </div>
-      </div>
-      <button class="modal-close" id="modal-close">✕</button>
-    </div>
-    <div class="modal-body">
-      <div id="modal-trips-list" class="trips-list"></div>
-    </div>
-    <div class="modal-foot">
-      <div class="stat"><b id="modal-total-trips">0</b><span>عدد الرحلات</span></div>
-      <div class="stat"><b id="modal-total-cost">0</b><span>إجمالي التكلفة (جنيه)</span></div>
-      <button class="btn btn-ghost" id="modal-close-2">إغلاق</button>
-    </div>
-  </div>
-</div>
+  if ("Notification" in window && Notification.permission === "granted") {
+    notifyBtn.textContent = "🔔 الإشعارات مفعّلة";
+    notifyBtn.style.color = "#6FBF8B";
+  }
 
-<!-- ============ TOAST CONTAINER ============ -->
-<div class="toast-container" id="toast-container"></div>
+  notifyBtn.addEventListener("click", async () => {
+    const granted = await requestNotificationPermission();
+    if (granted) {
+      notifyBtn.textContent = "🔔 الإشعارات مفعّلة";
+      notifyBtn.style.color = "#6FBF8B";
+      playNotificationSound();
+      try {
+        new Notification("✅ تم تفعيل الإشعارات", {
+          body: "هتصلك إشعارات عند وصول رحلة جديدة",
+        });
+      } catch (e) {
+        console.log("Notification error:", e);
+      }
+    } else {
+      notifyBtn.textContent = "🔔 الإشعارات محظورة";
+      notifyBtn.style.color = "#E5675F";
+    }
+  });
+}
 
-<script src="admin.js"></script>
-</body>
-</html>
+function showSkeleton() {
+  const tbody = document.getElementById("table-body");
+  const tableWrap = document.querySelector(".table-wrap");
+  const emptyState = document.getElementById("empty-state");
+  if (tableWrap) tableWrap.style.display = "";
+  if (emptyState) emptyState.classList.add("hidden");
+  if (!tbody) return;
+  tbody.innerHTML = Array.from({ length: 6 })
+    .map(
+      () => `
+    <tr class="skeleton-row">
+      <td><div class="skel" style="width:140px"></div></td>
+      <td><div class="skel" style="width:90px"></div></td>
+      <td><div class="skel" style="width:40px"></div></td>
+      <td><div class="skel" style="width:70px"></div></td>
+      <td><div class="skel" style="width:60px"></div></td>
+      <td><div class="skel" style="width:80px"></div></td>
+      <td><div class="skel" style="width:70px"></div></td>
+    </tr>
+  `
+    )
+    .join("");
+}
+
+function showAppLoading() {
+  const loginScreen = document.getElementById("login-screen");
+  const deniedScreen = document.getElementById("denied-screen");
+  const app = document.getElementById("app");
+  if (loginScreen) loginScreen.style.display = "none";
+  if (deniedScreen) deniedScreen.classList.add("hidden");
+  if (app) app.style.display = "block";
+}
+
+async function handleLogin() {
+  const emailEl = document.getElementById("login-email");
+  const passwordEl = document.getElementById("login-password");
+  const errorBox = document.getElementById("login-error");
+  const btn = document.getElementById("login-btn");
+
+  const email = emailEl ? emailEl.value.trim() : "";
+  const password = passwordEl ? passwordEl.value.trim() : "";
+
+  if (errorBox) errorBox.style.display = "none";
+  if (!email || !password) {
+    if (errorBox) {
+      errorBox.textContent = "يرجى إدخال البريد الإلكتروني وكلمة المرور";
+      errorBox.style.display = "block";
+    }
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "جاري الدخول...";
+  }
+
+  try {
+    const user = await realLogin(email, password);
+    const isAdmin = await realCheckAdmin(user.id);
+    if (!isAdmin) {
+      try {
+        await supabaseClient.auth.signOut();
+      } catch (_) {}
+      const loginScreen = document.getElementById("login-screen");
+      const deniedScreen = document.getElementById("denied-screen");
+      if (loginScreen) loginScreen.style.display = "none";
+      if (deniedScreen) deniedScreen.classList.remove("hidden");
+      return;
+    }
+    state.isAdmin = true;
+    state.adminEmail = user.email || "—";
+    await bootApp();
+  } catch (err) {
+    if (errorBox) {
+      errorBox.textContent = err.message || "حدث خطأ أثناء تسجيل الدخول";
+      errorBox.style.display = "block";
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "دخول";
+    }
+  }
+}
+
+async function handleLogout() {
+  stopRealtime();
+  try {
+    await supabaseClient.auth.signOut();
+  } catch (_) {}
+  state.isAdmin = false;
+  state.trips = [];
+  state.adminEmail = "";
+  const app = document.getElementById("app");
+  const loginScreen = document.getElementById("login-screen");
+  const passwordEl = document.getElementById("login-password");
+  if (app) app.style.display = "none";
+  if (loginScreen) loginScreen.style.display = "flex";
+  if (passwordEl) passwordEl.value = "";
+}
+
+async function bootApp() {
+  showAppLoading();
+  const adminEmailEl = document.getElementById("admin-email");
+  if (adminEmailEl) adminEmailEl.textContent = state.adminEmail;
+
+  showSkeleton();
+  try {
+    hideError();
+    state.trips = await fetchTrips();
+    renderAll();
+    initRealtime();
+  } catch (err) {
+    showError(err.message || "تعذر تحميل بيانات الرحلات");
+    state.trips = [];
+    renderAll();
+  }
+}
+
+async function checkExistingSession() {
+  try {
+    const { data } = await supabaseClient.auth.getSession();
+    const session = data?.session;
+    if (!session) return;
+    const isAdmin = await realCheckAdmin(session.user.id);
+    if (!isAdmin) {
+      try {
+        await supabaseClient.auth.signOut();
+      } catch (_) {}
+      return;
+    }
+    state.isAdmin = true;
+    state.adminEmail = session.user.email || "—";
+    await bootApp();
+  } catch (_) {}
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  if (!initSupabase()) return;
+
+  bindSortHeaders();
+  bindFilters();
+  bindSearch();
+  bindModal();
+  bindExport();
+  bindErrorBanner();
+  bindNotificationButton();
+
+  const loginBtn = document.getElementById("login-btn");
+  const passwordEl = document.getElementById("login-password");
+  const logoutBtn = document.getElementById("logout-btn");
+  const deniedBack = document.getElementById("denied-back");
+
+  if (loginBtn) loginBtn.addEventListener("click", handleLogin);
+  if (passwordEl) {
+    passwordEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") handleLogin();
+    });
+  }
+  if (logoutBtn) logoutBtn.addEventListener("click", handleLogout);
+  if (deniedBack) {
+    deniedBack.addEventListener("click", () => {
+      const deniedScreen = document.getElementById("denied-screen");
+      const loginScreen = document.getElementById("login-screen");
+      if (deniedScreen) deniedScreen.classList.add("hidden");
+      if (loginScreen) loginScreen.style.display = "flex";
+    });
+  }
+
+  checkExistingSession();
+});
