@@ -1,5 +1,5 @@
-  const SUPABASE_URL = 'https://sdbvevefxziyhzqzilrv.supabase.co';
-  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkYnZldmVmeHppeWh6cXppbHJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkzMjk0NjUsImV4cCI6MjEwNDkwNTQ2NX0.ugU0hZIdZmXYQXxdxGBSXJ8qy-EKBJ2pckemh8Yx7zg'
+const SUPABASE_URL = 'https://sdbvevefxziyhzqzilrv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkYnZldmVmeHppeWh6cXppbHJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkzMjk0NjUsImV4cCI6MjEwNDkwNTQ2NX0.ugU0hZIdZmXYQXxdxGBSXJ8qy-EKBJ2pckemh8Yx7zg';
 
 let supabaseClient = null;
 let realtimeChannel = null;
@@ -55,6 +55,73 @@ async function fetchTrips() {
   return data || [];
 }
 
+function playNotificationSound() {
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+
+    oscillator.frequency.value = 880;
+    oscillator.type = 'sine';
+    gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+
+    oscillator.start(audioCtx.currentTime);
+    oscillator.stop(audioCtx.currentTime + 0.4);
+  } catch (e) {
+    console.log('الصوت فشل:', e);
+  }
+}
+
+function showToast(trip) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.innerHTML = `
+    <span class="toast-title">🚐 رحلة جديدة</span>
+    <span class="toast-body">
+      ${escapeHtml(trip.full_name || '—')}<br>
+      ${escapeHtml(trip.from_location || '—')} → ${escapeHtml(trip.to_location || '—')}<br>
+      💰 ${trip.cost} جنيه
+    </span>
+  `;
+  container.appendChild(toast);
+
+  setTimeout(() => toast.remove(), 5000);
+}
+
+async function requestNotificationPermission() {
+  if (!('Notification' in window)) return false;
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') return false;
+  const permission = await Notification.requestPermission();
+  return permission === 'granted';
+}
+
+function showBrowserNotification(trip) {
+  if (!('Notification' in window)) return;
+  if (Notification.permission !== 'granted') return;
+
+  try {
+    const n = new Notification('🚐 رحلة جديدة', {
+      body: `${trip.full_name}\nمن: ${trip.from_location}\nإلى: ${trip.to_location}\nالتكلفة: ${trip.cost} جنيه`,
+      tag: 'trip-' + trip.id,
+    });
+    n.onclick = () => {
+      window.focus();
+      n.close();
+    };
+    setTimeout(() => n.close(), 8000);
+  } catch (e) {
+    console.log('الإشعار فشل:', e);
+  }
+}
+
 function initRealtime() {
   if (realtimeChannel) {
     supabaseClient.removeChannel(realtimeChannel);
@@ -71,6 +138,9 @@ function initRealtime() {
         if (exists) return;
         state.trips.unshift(payload.new);
         renderAll();
+        showToast(payload.new);
+        playNotificationSound();
+        showBrowserNotification(payload.new);
       }
     )
     .subscribe();
@@ -634,6 +704,35 @@ function bindErrorBanner() {
   btn.addEventListener("click", hideError);
 }
 
+function bindNotificationButton() {
+  const notifyBtn = document.getElementById("notify-btn");
+  if (!notifyBtn) return;
+
+  if ("Notification" in window && Notification.permission === "granted") {
+    notifyBtn.textContent = "🔔 الإشعارات مفعّلة";
+    notifyBtn.style.color = "#6FBF8B";
+  }
+
+  notifyBtn.addEventListener("click", async () => {
+    const granted = await requestNotificationPermission();
+    if (granted) {
+      notifyBtn.textContent = "🔔 الإشعارات مفعّلة";
+      notifyBtn.style.color = "#6FBF8B";
+      playNotificationSound();
+      try {
+        new Notification("✅ تم تفعيل الإشعارات", {
+          body: "هتصلك إشعارات عند وصول رحلة جديدة",
+        });
+      } catch (e) {
+        console.log("Notification error:", e);
+      }
+    } else {
+      notifyBtn.textContent = "🔔 الإشعارات محظورة";
+      notifyBtn.style.color = "#E5675F";
+    }
+  });
+}
+
 function showSkeleton() {
   const tbody = document.getElementById("table-body");
   const tableWrap = document.querySelector(".table-wrap");
@@ -780,6 +879,7 @@ document.addEventListener("DOMContentLoaded", () => {
   bindModal();
   bindExport();
   bindErrorBanner();
+  bindNotificationButton();
 
   const loginBtn = document.getElementById("login-btn");
   const passwordEl = document.getElementById("login-password");
