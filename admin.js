@@ -55,37 +55,25 @@ async function fetchTrips() {
   return data || [];
 }
 
-let realtimeChannel = null;
-
 function initRealtime() {
-  supabaseClient
-    .channel('trips-changes')
+  if (realtimeChannel) {
+    supabaseClient.removeChannel(realtimeChannel);
+    realtimeChannel = null;
+  }
+  realtimeChannel = supabaseClient
+    .channel("trips-changes")
     .on(
-      'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'trips' },
-      payload => {
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "trips" },
+      (payload) => {
+        if (!payload?.new) return;
+        const exists = state.trips.some((t) => t.id === payload.new.id);
+        if (exists) return;
         state.trips.unshift(payload.new);
         renderAll();
       }
     )
     .subscribe();
-}
-    )
-    .on(
-      'postgres_changes',
-      { event: 'DELETE', schema: 'public', table: 'trips' },
-      (payload) => {
-        if (!payload?.old) return;
-        state.trips = state.trips.filter((t) => t.id !== payload.old.id);
-        renderAll();
-      }
-    )
-    .subscribe((status) => {
-      console.log('Realtime status:', status);
-      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-        setTimeout(initRealtime, 5000);
-      }
-    });
 }
 
 function stopRealtime() {
