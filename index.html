@@ -8,7 +8,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js"></script>
-<script src="admin.js"></script>
 <style>
 /* ============ DESIGN TOKENS ============ */
 :root{
@@ -166,7 +165,7 @@ input, select{ font-family:inherit; }
 }
 .brand-text h1{ font-size: 15.5px; font-weight: 700; }
 .brand-text span{ font-size: 11.5px; color: var(--text-muted); }
-.topbar-right{ display:flex; align-items:center; gap: 12px; }
+.topbar-right{ display:flex; align-items:center; gap: 12px; flex-wrap: wrap; }
 .live-dot{
   display:flex; align-items:center; gap:7px;
   font-size: 12px; color: var(--text-muted);
@@ -400,6 +399,156 @@ tfoot td{
 .modal-foot .stat b{ display:block; font-size:16px; font-weight:800; }
 .modal-foot .stat span{ font-size:11px; color: var(--text-muted); }
 
+/* ============ TRIPS LIST IN MODAL ============ */
+.trips-list {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.trip-block {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: border-color .15s;
+}
+
+.trip-block:hover {
+  border-color: rgba(201,160,82,0.4);
+}
+
+.trip-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: rgba(201,160,82,0.06);
+  border-bottom: 1px solid var(--border-soft);
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.trip-block-date {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gold-bright);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.trip-block-time {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  direction: ltr;
+}
+
+.trip-block-legs {
+  padding: 0;
+}
+
+.trip-leg {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-soft);
+  align-items: center;
+}
+
+.trip-leg:last-child {
+  border-bottom: none;
+}
+
+.trip-leg-route {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.trip-leg-from,
+.trip-leg-to {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.trip-leg-arrow {
+  color: var(--gold);
+  font-size: 12px;
+}
+
+.trip-leg-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.trip-leg-transport {
+  background: var(--surface);
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+
+.trip-leg-cost {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--gold-bright);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.trip-block-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: rgba(201,160,82,0.08);
+  border-top: 1px solid rgba(201,160,82,0.2);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.trip-block-footer .label {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.trip-block-footer .total {
+  color: var(--gold-bright);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.trip-block-notes {
+  padding: 10px 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--surface);
+  border-top: 1px solid var(--border-soft);
+  line-height: 1.6;
+}
+
+.trip-block-notes::before {
+  content: "📝 ";
+  margin-inline-end: 4px;
+}
+
+.modal-empty {
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13.5px;
+}
+
 /* ============ TOAST NOTIFICATIONS ============ */
 .toast-container {
   position: fixed;
@@ -447,6 +596,8 @@ tfoot td{
   .cards-grid{ grid-template-columns: 1fr 1fr; }
   .container{ padding: 18px 14px 50px; }
   .topbar{ padding: 14px 16px; }
+  .trip-leg { grid-template-columns: 1fr; }
+  .trip-leg-cost { text-align: start; }
 }
 </style>
 </head>
@@ -615,6 +766,8 @@ tfoot td{
         <p>لا توجد رحلات في هذه الفترة</p>
       </div>
       <div class="table-footer">
+        <      </div>
+      <div class="table-footer">
         <span class="page-info" id="page-info-text">—</span>
         <div class="pager" id="pager"></div>
       </div>
@@ -637,19 +790,7 @@ tfoot td{
       <button class="modal-close" id="modal-close">✕</button>
     </div>
     <div class="modal-body">
-      <table>
-        <thead>
-          <tr>
-            <th>تاريخ الرحلة</th>
-            <th>من</th>
-            <th>إلى</th>
-            <th>نوع المواصلة</th>
-            <th>التكلفة</th>
-            <th>وقت التسجيل</th>
-          </tr>
-        </thead>
-        <tbody id="modal-table-body"></tbody>
-      </table>
+      <div id="modal-trips-list" class="trips-list"></div>
     </div>
     <div class="modal-foot">
       <div class="stat"><b id="modal-total-trips">0</b><span>عدد الرحلات</span></div>
