@@ -399,6 +399,45 @@ tfoot td{
 .modal-foot .stat b{ display:block; font-size:16px; font-weight:800; }
 .modal-foot .stat span{ font-size:11px; color: var(--text-muted); }
 
+/* ============ TOAST NOTIFICATIONS ============ */
+.toast-container {
+  position: fixed;
+  top: 80px;
+  left: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+.toast {
+  background: linear-gradient(135deg, #C9A052, #E0BD79);
+  color: #17130A;
+  padding: 14px 18px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 13.5px;
+  box-shadow: 0 10px 30px rgba(201,160,82,0.4);
+  animation: slideIn 0.3s ease;
+  min-width: 260px;
+  max-width: 340px;
+  pointer-events: auto;
+  line-height: 1.6;
+}
+.toast .toast-title {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+.toast .toast-body {
+  font-size: 12.5px;
+  opacity: 0.85;
+}
+@keyframes slideIn {
+  from { transform: translateX(-400px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
 @media (max-width: 900px){
   .cards-grid{ grid-template-columns: repeat(2,1fr); }
   .charts-grid{ grid-template-columns: 1fr; }
@@ -457,6 +496,7 @@ tfoot td{
         <span id="admin-email">—</span>
         <div class="avatar">A</div>
       </div>
+      <button class="btn btn-ghost" id="notify-btn">🔔 تفعيل الإشعارات</button>
       <button class="btn btn-ghost" id="logout-btn">تسجيل الخروج</button>
     </div>
   </div>
@@ -617,6 +657,9 @@ tfoot td{
     </div>
   </div>
 </div>
+
+<!-- ============ TOAST CONTAINER ============ -->
+<div class="toast-container" id="toast-container"></div>
 
 <script src="admin.js"></script>
 </body>
