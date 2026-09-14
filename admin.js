@@ -58,34 +58,18 @@ async function fetchTrips() {
 let realtimeChannel = null;
 
 function initRealtime() {
-  if (realtimeChannel) {
-    supabaseClient.removeChannel(realtimeChannel);
-    realtimeChannel = null;
-  }
-
-  realtimeChannel = supabaseClient
+  supabaseClient
     .channel('trips-changes')
     .on(
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'trips' },
-      (payload) => {
-        if (!payload?.new) return;
-        const exists = state.trips.some((t) => t.id === payload.new.id);
-        if (exists) return;
+      payload => {
         state.trips.unshift(payload.new);
         renderAll();
       }
     )
-    .on(
-      'postgres_changes',
-      { event: 'UPDATE', schema: 'public', table: 'trips' },
-      (payload) => {
-        if (!payload?.new) return;
-        const idx = state.trips.findIndex((t) => t.id === payload.new.id);
-        if (idx >= 0) state.trips[idx] = payload.new;
-        else state.trips.unshift(payload.new);
-        renderAll();
-      }
+    .subscribe();
+}
     )
     .on(
       'postgres_changes',
